@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# DES S-boxes
+# Boîtes S du DES
 S_BOXES = [
     # S1
     [
@@ -60,7 +60,7 @@ S_BOXES = [
     ]
 ]
 
-# Permutation tables
+# Tables de permutation
 IP = [
     58, 50, 42, 34, 26, 18, 10, 2,
     60, 52, 44, 36, 28, 20, 12, 4,
@@ -192,11 +192,11 @@ def generate_subkeys(key_56bit):
     Les sous-clés sont utilisées dans les 16 tours de l'algorithme Feistel.
     """
     subkeys = []
-    # Split into left and right halves (28 bits each)
-    left = key_56bit[:4]  # First 28 bits (4 bytes, but we'll handle as bits)
-    right = key_56bit[3:7]  # Last 28 bits (overlapping bytes)
+    # Diviser en moitiés gauche et droite (28 bits chacune)
+    left = key_56bit[:4]  # Premiers 28 bits (4 octets, mais nous les traiterons comme des bits)
+    right = key_56bit[3:7]  # Derniers 28 bits (octets chevauchants)
 
-    # Convert to bit lists for easier manipulation
+    # Convertir en listes de bits pour une manipulation plus facile
     left_bits = []
     right_bits = []
 
@@ -211,16 +211,16 @@ def generate_subkeys(key_56bit):
     right_bits = right_bits[:28]
 
     for round_num in range(16):
-        # Rotate left and right halves
+        # Faire pivoter les moitiés gauche et droite
         shift = KEY_SHIFTS[round_num]
         left_bits = left_bits[shift:] + left_bits[:shift]
         right_bits = right_bits[shift:] + right_bits[:shift]
 
-        # Combine and apply PC-2
+        # Combiner et appliquer PC-2
         combined_bits = left_bits + right_bits
         subkey_bits = [combined_bits[pos-1] for pos in PC2]
 
-        # Convert to bytes
+        # Convertir en octets
         subkey = bytearray(6)
         for i in range(48):
             if subkey_bits[i]:
@@ -239,7 +239,7 @@ def feistel_function(right_half, subkey):
     à la moitié droite du bloc de données en utilisant la sous-clé correspondante.
     Elle produit une sortie de 32 bits qui sera XORée avec la moitié gauche.
     """
-    # Expansion E: 32 bits -> 48 bits
+    # Expansion E : 32 bits -> 48 bits
     expanded = []
     for pos in E:
         bit_pos = pos - 1
@@ -247,7 +247,7 @@ def feistel_function(right_half, subkey):
         bit_idx = 7 - (bit_pos % 8)
         expanded.append((right_half[byte_idx] >> bit_idx) & 1)
 
-    # XOR with subkey (48 bits)
+    # XOR avec la sous-clé (48 bits)
     subkey_bits = []
     for byte in subkey:
         for i in range(7, -1, -1):
@@ -256,29 +256,29 @@ def feistel_function(right_half, subkey):
 
     xored = [expanded[i] ^ subkey_bits[i] for i in range(48)]
 
-    # S-box substitution: 48 bits -> 32 bits
+    # Substitution par boîte S : 48 bits -> 32 bits
     output_32 = []
     for sbox_idx in range(8):
-        # 6 bits per S-box
+        # 6 bits par boîte S
         start = sbox_idx * 6
         six_bits = xored[start:start+6]
 
-        # Row: bits 0 and 5
+        # Ligne : bits 0 et 5
         row = (six_bits[0] << 1) | six_bits[5]
-        # Column: bits 1-4
+        # Colonne : bits 1-4
         col = (six_bits[1] << 3) | (six_bits[2] << 2) | (six_bits[3] << 1) | six_bits[4]
 
-        # Get value from S-box
+        # Obtenir la valeur de la boîte S
         sbox_value = S_BOXES[sbox_idx][row][col]
 
-        # Convert to 4 bits
+        # Convertir en 4 bits
         for i in range(3, -1, -1):
             output_32.append((sbox_value >> i) & 1)
 
-    # Permutation P: 32 bits -> 32 bits
+    # Permutation P : 32 bits -> 32 bits
     permuted = [output_32[pos-1] for pos in P]
 
-    # Convert back to bytes
+    # Reconvertir en octets
     result = bytearray(4)
     for i in range(32):
         if permuted[i]:
@@ -432,14 +432,14 @@ def encrypt_message(message, key):
 
     result = bytearray()
 
-    # Generate subkeys once for all blocks
+    # Générer les sous-clés une fois pour tous les blocs
     pc1_key = pc1_permutation(key_64bit)
     subkeys = generate_subkeys(pc1_key)
 
     for i in range(0, len(message), 8):
         block = message[i:i+8]
 
-        # Initial Permutation (IP)
+        # Permutation initiale (IP)
         ip_bits = []
         for pos in IP:
             bit_pos = pos - 1
@@ -447,39 +447,39 @@ def encrypt_message(message, key):
             bit_idx = 7 - (bit_pos % 8)
             ip_bits.append((block[byte_idx] >> bit_idx) & 1)
 
-        # Split into left and right halves (32 bits each)
+        # Diviser en moitiés gauche et droite (32 bits chacune)
         left = ip_bits[:32]
         right = ip_bits[32:]
 
-        # 16 Feistel rounds
+        # 16 tours Feistel
         for round_num in range(16):
-            # Save right half
+            # Sauvegarder la moitié droite
             right_old = right[:]
 
-            # Feistel function on right half
+            # Fonction Feistel sur la moitié droite
             right_bytes = bytes([sum(bit << (7 - j) for j, bit in enumerate(right[i:i+8])) for i in range(0, 32, 8)])
             f_result = feistel_function(right_bytes, subkeys[round_num])
 
-            # Convert f_result back to bits
+            # Reconvertir f_result en bits
             f_bits = []
             for byte in f_result:
                 for j in range(7, -1, -1):
                     f_bits.append((byte >> j) & 1)
 
-            # XOR left half with f_result
+            # XOR de la moitié gauche avec f_result
             left_new = [left[k] ^ f_bits[k] for k in range(32)]
 
-            # Swap halves
+            # Échanger les moitiés
             left = right_old
             right = left_new
 
-        # Combine halves (note: after 16 rounds, left and right are swapped)
+        # Combiner les moitiés (note : après 16 tours, gauche et droite sont échangées)
         combined_bits = right + left
 
-        # Final Permutation (FP)
+        # Permutation finale (FP)
         fp_bits = [combined_bits[pos-1] for pos in FP]
 
-        # Convert back to bytes
+        # Reconvertir en octets
         encrypted_block = bytearray(8)
         for j in range(64):
             if fp_bits[j]:
@@ -496,17 +496,17 @@ def decrypt_message(ciphertext, key):
 
     result = bytearray()
 
-    # Generate subkeys once for all blocks
+    # Générer les sous-clés une fois pour tous les blocs
     pc1_key = pc1_permutation(key_64bit)
     subkeys = generate_subkeys(pc1_key)
 
-    # For decryption, use subkeys in reverse order
+    # Pour le déchiffrement, utiliser les sous-clés dans l'ordre inverse
     subkeys = subkeys[::-1]
 
     for i in range(0, len(ciphertext), 8):
         block = ciphertext[i:i+8]
 
-        # Initial Permutation (IP)
+        # Permutation initiale (IP)
         ip_bits = []
         for pos in IP:
             bit_pos = pos - 1
@@ -514,39 +514,39 @@ def decrypt_message(ciphertext, key):
             bit_idx = 7 - (bit_pos % 8)
             ip_bits.append((block[byte_idx] >> bit_idx) & 1)
 
-        # Split into left and right halves (32 bits each)
+        # Diviser en moitiés gauche et droite (32 bits chacune)
         left = ip_bits[:32]
         right = ip_bits[32:]
 
-        # 16 Feistel rounds (same as encryption but with reversed subkeys)
+        # 16 tours Feistel (identique au chiffrement mais avec sous-clés inversées)
         for round_num in range(16):
-            # Save right half
+            # Sauvegarder la moitié droite
             right_old = right[:]
 
-            # Feistel function on right half
+            # Fonction Feistel sur la moitié droite
             right_bytes = bytes([(sum(bit << (7 - j) for j, bit in enumerate(right[i:i+8]))) for i in range(0, 32, 8)])
             f_result = feistel_function(right_bytes, subkeys[round_num])
 
-            # Convert f_result back to bits
+            # Reconvertir f_result en bits
             f_bits = []
             for byte in f_result:
                 for j in range(7, -1, -1):
                     f_bits.append((byte >> j) & 1)
 
-            # XOR left half with f_result
+            # XOR de la moitié gauche avec f_result
             left_new = [left[k] ^ f_bits[k] for k in range(32)]
 
-            # Swap halves
+            # Échanger les moitiés
             left = right_old
             right = left_new
 
-        # Combine halves (note: after 16 rounds, left and right are swapped)
+        # Combiner les moitiés (note : après 16 tours, gauche et droite sont échangées)
         combined_bits = right + left
 
-        # Final Permutation (FP)
+        # Permutation finale (FP)
         fp_bits = [combined_bits[pos-1] for pos in FP]
 
-        # Convert back to bytes
+        # Reconvertir en octets
         decrypted_block = bytearray(8)
         for j in range(64):
             if fp_bits[j]:
@@ -556,7 +556,7 @@ def decrypt_message(ciphertext, key):
 
         result.extend(decrypted_block)
 
-    # Remove padding
+    # Supprimer le remplissage
     if result:
         pad_len = result[-1]
         if 1 <= pad_len <= 8:
@@ -711,14 +711,14 @@ def main():
 
             print(f"\nBinaire PC-1 : {bytes_to_binary(pc1_result)}")
 
-            # Generate and display subkeys
+            # Générer et afficher les sous-clés
             subkeys = generate_subkeys(pc1_result)
             print(f"\nGénération des 16 sous-clés (48 bits chacune) :")
             print("="*60)
 
             for i, subkey in enumerate(subkeys):
                 print(f"Sous-clé {i+1:2d} : {subkey.hex().upper()}")
-                # Show binary representation (first 24 bits for readability)
+                # Afficher la représentation binaire (premiers 24 bits pour la lisibilité)
                 binary = bytes_to_binary(subkey)
                 print(f"             {' '.join(binary[j:j+8] for j in range(0, 24, 8))}...")
 
